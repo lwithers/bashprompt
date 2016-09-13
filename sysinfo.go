@@ -10,6 +10,7 @@ import (
 
 var (
 	User          *user.User
+	IsRoot        bool
 	Hostname, Cwd string
 	IsLocalhost   bool
 	LoadAvg       float32
@@ -29,6 +30,7 @@ func GetUser() {
 			HomeDir:  "/tmp",
 		}
 	}
+	IsRoot = User.Uid == "0"
 }
 
 // GetHost finds the current hostname, and tests for the SSH_CONNECTION
