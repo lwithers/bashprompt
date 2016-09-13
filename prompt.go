@@ -1,13 +1,9 @@
 package main
 
 import (
-	"bytes"
+	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
-	"os"
-	"os/exec"
-	"os/user"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -20,41 +16,33 @@ const (
 )
 
 var (
-	User          *user.User
-	Hostname, Cwd string
-	LoadAvg       string
-	Width         int
+	Width int
 
 	ExitCode    = flag.String("exitCode", "0", "exit code of last process")
-	ScreenWidth = flag.String("screenWidth", "80", "screen width in chars")
+	ScreenWidth = flag.String("screenWidth", "", "screen width in chars")
 )
 
 func main() {
-	var err error
 	flag.Parse()
 
-	Width, _ = strconv.Atoi(*ScreenWidth)
+	GetUser()
+	GetHost()
+	GetLoadAverage()
+	GetCwd()
+
+	GetWidth()
 	NewlineIfNecessary()
+	fmt.Printf(strings.Repeat(" ", Width))
 
-	User, err = user.Current()
-	_ = err // TODO
-
-	Hostname, err = os.Hostname()
-	_ = err // TODO
-
-	Cwd, err = os.Getwd()
-	_ = err // TODO
-
-	LoadAvg = "LOAD"
-	statusFlag := "▲"
+	statusFlag := CSI + "32m▲" + CSI + "m"
 	if *ExitCode != "0" {
-		statusFlag = "▼"
+		statusFlag = CSI + "31m▼" + CSI + "m"
 	}
 
 	prefix := fmt.Sprintf("┌(%s)─(%s@%s)─(",
 		time.Now().Format(time.RFC822),
 		User.Username, Hostname)
-	suffix := fmt.Sprintf("─(%s %s)",
+	suffix := fmt.Sprintf("─(%.2f %s)",
 		LoadAvg, statusFlag)
 	reqLen := PrintableLength(prefix) + PrintableLength(suffix) + 1
 	path := FitPath(Cwd, Width-reqLen)
@@ -75,6 +63,28 @@ func main() {
 
 	fmt.Printf("└─(%s)─(%s) \\$ ",
 		branch, filepath.Base(Cwd))
+}
+
+// GetWidth interprets the screen width command line parameter, saving it in
+// Width.
+func GetWidth() {
+	Width = 80 // failsafe value
+
+	if *ScreenWidth == "" {
+		CaptureError(errors.New("-screenWidth not specified"))
+	}
+
+	w, err := strconv.Atoi(*ScreenWidth)
+	if err != nil {
+		CaptureError(err)
+		return
+	}
+	if w < 2 {
+		CaptureError(fmt.Errorf("width too small: %d", w))
+		return
+	}
+
+	Width = w
 }
 
 // NewlineIfNecessary determines if a newline is required, and arranges for it
@@ -124,50 +134,4 @@ func FitPath(p string, max int) string {
 		}
 	}
 	return "…"
-}
-
-// LoadAverage returns the 1-minute load average string, colour coded.
-func LoadAverage() string {
-	b, err := ioutil.ReadFile("/proc/loadavg")
-	if err != nil {
-		return CSI + "41mERR" + CSI + "m"
-	}
-
-	p := bytes.IndexByte(b, ' ')
-	if p == -1 {
-	}
-}
-
-func InsideGitRepo(dir string) bool {
-	for retry := 0; retry < 10; retry++ {
-		if dir == "/" {
-			return false
-		}
-		_, err := os.Stat(filepath.Join(dir, ".git"))
-		if err == nil {
-			return true
-		}
-		dir = filepath.Dir(dir)
-	}
-	return false
-}
-
-func GitBranch() string {
-	c := exec.Command("/usr/bin/git", "describe", "--all",
-		"--dirty") // TODO dirty code/colour
-	b, err := c.Output()
-	if err != nil {
-		return err.Error() // TODO colour
-	}
-	for {
-		p := bytes.IndexRune(b, '/')
-		if p == -1 {
-			break
-		}
-		b = b[p+1:]
-	}
-	if len(b) > 0 && b[len(b)-1] == '\n' {
-		b = b[:len(b)-1]
-	}
-	return string(b)
 }
