@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -34,7 +33,6 @@ func main() {
 	GetCwd()
 
 	GetWidth()
-	NewlineIfNecessary()
 
 	firstLine := []*RoundBoxInfo{
 		Time(),
@@ -52,24 +50,23 @@ func main() {
 		DirnameBox(),
 	}
 
-	buf := bytes.NewBuffer(nil)
-	PrintLine(buf, FirstLine, firstLine)
-	buf.WriteRune('\n')
-	PrintLine(buf, SecondLine, secondLine)
+	var b bytes.Buffer
+	NewlineIfNecessary(&b)
+	b.WriteString(strings.Repeat(" ", Width))
+	PrintLine(&b, FirstLine, firstLine)
+	b.WriteRune('\n')
+	PrintLine(&b, SecondLine, secondLine)
 
 	if IsRoot {
-		SetColour(buf, "31")
-		buf.WriteString(" # ")
+		SetColour(&b, "31")
+		b.WriteString(" # ")
 	} else {
-		SetColour(buf, "32")
-		buf.WriteString(" $ ")
+		SetColour(&b, "32")
+		b.WriteString(" $ ")
 	}
-	SetColour(buf, "")
+	SetColour(&b, "")
 
-	os.Stdout.Write(buf.Bytes())
-
-	// TODO: only here for debugging
-	ioutil.WriteFile("/home/lwithers/tmp/raw-terminal", buf.Bytes(), 0666)
+	os.Stdout.Write(b.Bytes())
 }
 
 // GetWidth interprets the screen width command line parameter, saving it in
@@ -100,13 +97,11 @@ func GetWidth() {
 // If no newline was required, then the fillers will be overwritten by our
 // normal output; otherwise, the fillers on the starting line (with partial
 // output from the previous command) will be left in place.
-func NewlineIfNecessary() {
-	var b bytes.Buffer
-	SetColour(&b, "35")
-	b.WriteString(strings.Repeat("·", Width))
-	b.Write([]byte(BashNPStart + CSI + "G" + BashNPEnd))
-	SetColour(&b, "")
-	os.Stdout.Write(b.Bytes())
+func NewlineIfNecessary(w TerminalWriter) {
+	SetColour(w, "35")
+	w.WriteString(strings.Repeat("·", Width))
+	w.Write([]byte(BashNPStart + CSI + "G" + BashNPEnd))
+	SetColour(w, "")
 }
 
 // Time returns a RoundBox formatted with the system time.
@@ -125,32 +120,40 @@ func Time() *RoundBoxInfo {
 	return RoundBox(b.String())
 }
 
-// Who returns a RoundBox formatted with the username and, if not the local
-// system, hostname.
+// Who returns a RoundBox formatted with the username and hostname, with
+// highlighting for root/remote systems.
 func Who() *RoundBoxInfo {
-	var b bytes.Buffer
+	var (
+		b           bytes.Buffer
+		leftColour  = 7
+		rightColour = 7
+	)
 
 	// write username, draw attention to root
 	if IsRoot {
-		SetColour(&b, "1;31")
-	} else {
-		SetColour(&b, "32")
+		leftColour = 1
+		SetColour(&b, "1;37;41")
 	}
 	b.WriteString(User.Username)
 
 	// write separator char
-	SetColour(&b, "34")
+	if IsRoot || !IsLocalhost {
+		SetColour(&b, "0;34;41")
+	}
 	b.WriteRune('@')
 
 	// write hostname, draw attention to remote
 	if !IsLocalhost {
-		SetColour(&b, "1;31")
+		rightColour = 1
+		SetColour(&b, "1;37;41")
 	} else {
-		SetColour(&b, "32")
+		SetColour(&b, "0;47")
 	}
 	b.WriteString(Hostname)
 
-	return RoundBox(b.String())
+	r := RoundBox(b.String())
+	r.SetColour(leftColour, rightColour)
+	return r
 }
 
 // LoadAverage returns a RoundBox displaying the colour-coded load average.
@@ -186,10 +189,19 @@ func CommandStatus() *RoundBoxInfo {
 
 // DirnameBox returns a box with the current directory name.
 func DirnameBox() *RoundBoxInfo {
+	var d string
+	if Cwd == os.Getenv("HOME") {
+		d = "~"
+	} else {
+		d = filepath.Base(Cwd)
+	}
+
 	var b bytes.Buffer
-	SetColour(&b, "1")
-	b.WriteString(filepath.Base(Cwd))
-	return RoundBox(b.String())
+	SetColour(&b, "1;37")
+	b.WriteString(d)
+	r := RoundBox(b.String())
+	r.SetColour(2, 2)
+	return r
 }
 
 func FitPath(p string, max int) string {

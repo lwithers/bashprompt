@@ -1,1 +1,1 @@
-export PS1="\$(/home/lwithers/go/bin/bashprompt -exitCode=\$? -screenWidth=\${COLUMNS})"
+export PS1="\$(${GOPATH}/bin/bashprompt -exitCode=\$? -screenWidth=\${COLUMNS})"
