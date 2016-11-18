@@ -1,26 +1,46 @@
 package main
 
-import "strings"
-
-type RoundBox string
-
-type StringWriter interface {
-	WriteString(s string) (int, error)
-}
+import (
+	"fmt"
+	"strings"
+)
 
 const (
 	FirstLine  = -1
 	SecondLine = -2
 
 	RoundBoxPadding = 2
+	RoundBoxSpacing = 2
 )
 
-func (r RoundBox) Width() int {
-	return PrintableLength(string(r)) + RoundBoxPadding
+type RoundBoxInfo struct {
+	leftColour, rightColour int
+	text                    string
 }
 
-func (r RoundBox) Draw(w StringWriter, leading int) {
-	w.WriteString(CSI + "37m")
+func RoundBox(s string) *RoundBoxInfo {
+	return &RoundBoxInfo{
+		leftColour:  7,
+		rightColour: 7,
+		text:        s,
+	}
+}
+
+func (r *RoundBoxInfo) SetColour(leftColour, rightColour int) {
+	if leftColour >= 0 && leftColour <= 7 {
+		r.leftColour = leftColour
+	}
+	if rightColour >= 0 && rightColour <= 7 {
+		r.rightColour = rightColour
+	}
+}
+
+func (r *RoundBoxInfo) Width() int {
+	return PrintableLength(r.text) + RoundBoxPadding
+}
+
+func (r *RoundBoxInfo) Draw(w TerminalWriter, leading int) {
+	SetColour(w, "37")
 	switch leading {
 	case FirstLine:
 		w.WriteString("┌")
@@ -30,13 +50,15 @@ func (r RoundBox) Draw(w StringWriter, leading int) {
 		w.WriteString(strings.Repeat("─", leading))
 	}
 
-	w.WriteString("(")
-	w.WriteString(CSI + "m")
-	w.WriteString(string(r))
-	w.WriteString(CSI + "0m" + CSI + "37m" + ")")
+	SetColour(w, fmt.Sprintf("3%d", r.leftColour))
+	w.WriteRune('') // \uE0B6 (powerline extra symbol)
+	SetColour(w, fmt.Sprintf("0;4%d", r.leftColour))
+	w.WriteString(r.text)
+	SetColour(w, fmt.Sprintf("0;3%d", r.rightColour))
+	w.WriteRune('') // \uE0B4 (powerline extra symbol)
 }
 
-func PrintLine(w StringWriter, line int, boxes []RoundBox) {
+func PrintLine(w TerminalWriter, line int, boxes []*RoundBoxInfo) {
 	var leading int
 
 	for i := range boxes {
@@ -44,15 +66,15 @@ func PrintLine(w StringWriter, line int, boxes []RoundBox) {
 		case i == 0:
 			leading = line
 		case line == FirstLine && i == len(boxes)-2:
-			leading = 1 + RemainingWidth(line, boxes)
+			leading = RoundBoxSpacing + RemainingWidth(line, boxes)
 		default:
-			leading = 1
+			leading = RoundBoxSpacing
 		}
 		boxes[i].Draw(w, leading)
 	}
 }
 
-func RemainingWidth(line int, boxes []RoundBox) int {
+func RemainingWidth(line int, boxes []*RoundBoxInfo) int {
 	r := Width // how many chars we can print
 
 	// subtract length of lead string
@@ -69,7 +91,7 @@ func RemainingWidth(line int, boxes []RoundBox) int {
 		r -= boxes[i].Width()
 	}
 
-	// remove one char per inter-box space
-	r -= len(boxes) - 1
+	// remove two chars per inter-box space
+	r -= RoundBoxSpacing * (len(boxes) - 1)
 	return r
 }

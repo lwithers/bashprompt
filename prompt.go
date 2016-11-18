@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -14,7 +15,6 @@ import (
 )
 
 const (
-	CSI        = "\x1B["
 	TimeFormat = "Mon Jan _2 15:04:05 MST"
 )
 
@@ -36,43 +36,40 @@ func main() {
 	GetWidth()
 	NewlineIfNecessary()
 
-	statusFlag := CSI + "32m▲" + CSI + "m"
-	if *ExitCode != "0" {
-		statusFlag = CSI + "31m▼" + CSI + "m"
-	}
-
-	var secondLine []RoundBox
-	firstLine := []RoundBox{
+	firstLine := []*RoundBoxInfo{
 		Time(),
 		Who(),
-		"", // placeholder for truncated directory
+		RoundBox(""), // placeholder for truncated directory
 		LoadAverage(),
-		RoundBox(statusFlag),
+		CommandStatus(),
 	}
 
 	path := FitPath(Cwd, RemainingWidth(FirstLine, firstLine))
 	firstLine[2] = RoundBox(path)
 
-	branch := "n/a"
-	if InsideGitRepo(Cwd) {
-		branch = GitBranch()
+	secondLine := []*RoundBoxInfo{
+		GitBox(),
+		DirnameBox(),
 	}
-	secondLine = append(secondLine,
-		RoundBox(branch),
-		RoundBox(filepath.Base(Cwd)),
-	)
 
 	buf := bytes.NewBuffer(nil)
 	PrintLine(buf, FirstLine, firstLine)
 	buf.WriteRune('\n')
 	PrintLine(buf, SecondLine, secondLine)
+
 	if IsRoot {
-		buf.WriteString(CSI + "31m # " + CSI + "m")
+		SetColour(buf, "31")
+		buf.WriteString(" # ")
 	} else {
-		buf.WriteString(CSI + "32m $ " + CSI + "m")
+		SetColour(buf, "32")
+		buf.WriteString(" $ ")
 	}
+	SetColour(buf, "")
 
 	os.Stdout.Write(buf.Bytes())
+
+	// TODO: only here for debugging
+	ioutil.WriteFile("/home/lwithers/tmp/raw-terminal", buf.Bytes(), 0666)
 }
 
 // GetWidth interprets the screen width command line parameter, saving it in
@@ -104,77 +101,95 @@ func GetWidth() {
 // normal output; otherwise, the fillers on the starting line (with partial
 // output from the previous command) will be left in place.
 func NewlineIfNecessary() {
-	fmt.Printf(CSI+"37m%s"+CSI+"G"+CSI+"m",
-		strings.Repeat("·", Width))
+	var b bytes.Buffer
+	SetColour(&b, "35")
+	b.WriteString(strings.Repeat("·", Width))
+	b.Write([]byte(BashNPStart + CSI + "G" + BashNPEnd))
+	SetColour(&b, "")
+	os.Stdout.Write(b.Bytes())
 }
 
 // Time returns a RoundBox formatted with the system time.
-func Time() RoundBox {
-	buf := bytes.NewBuffer(nil)
-	buf.WriteString(CSI + "30m" + CSI + "1m")
-	buf.WriteString(time.Now().Format(TimeFormat))
-	return RoundBox(buf.String())
+func Time() *RoundBoxInfo {
+	t := time.Now().Format(TimeFormat)
+	printUTC := strings.HasSuffix(t, "GMT")
+
+	var b bytes.Buffer
+	SetColour(&b, "36")
+	if printUTC {
+		b.WriteString(t[:len(t)-3])
+		b.Write([]byte("UTC"))
+	} else {
+		b.WriteString(t)
+	}
+	return RoundBox(b.String())
 }
 
 // Who returns a RoundBox formatted with the username and, if not the local
 // system, hostname.
-func Who() RoundBox {
-	buf := bytes.NewBuffer(nil)
+func Who() *RoundBoxInfo {
+	var b bytes.Buffer
+
+	// write username, draw attention to root
 	if IsRoot {
-		buf.WriteString(CSI + "31m")
+		SetColour(&b, "1;31")
 	} else {
-		buf.WriteString(CSI + "32m")
+		SetColour(&b, "32")
 	}
-	buf.WriteString(User.Username)
-	buf.WriteString(CSI + "34m@")
+	b.WriteString(User.Username)
 
-	if IsLocalhost {
-		buf.WriteString(CSI + "32m")
+	// write separator char
+	SetColour(&b, "34")
+	b.WriteRune('@')
+
+	// write hostname, draw attention to remote
+	if !IsLocalhost {
+		SetColour(&b, "1;31")
 	} else {
-		buf.WriteString(CSI + "31m")
+		SetColour(&b, "32")
 	}
-	buf.WriteString(Hostname)
+	b.WriteString(Hostname)
 
-	return RoundBox(buf.String())
+	return RoundBox(b.String())
 }
 
 // LoadAverage returns a RoundBox displaying the colour-coded load average.
-func LoadAverage() RoundBox {
-	buf := bytes.NewBuffer(nil)
+func LoadAverage() *RoundBoxInfo {
+	var b bytes.Buffer
 	switch {
 	case LoadAvg < 0.2: // green
-		buf.WriteString(CSI + "32m")
+		SetColour(&b, "32")
 	case LoadAvg < 2.0: // yellow
-		buf.WriteString(CSI + "33m")
+		SetColour(&b, "33")
 	default: // red
-		buf.WriteString(CSI + "31m")
+		SetColour(&b, "31")
 	}
 
-	fmt.Fprintf(buf, "%.2f", LoadAvg)
+	fmt.Fprintf(&b, "%.2f", LoadAvg)
 
-	return RoundBox(buf.String())
+	return RoundBox(b.String())
 }
 
-// PrintableLength returns the length of the printable characters in the given
-// string. It will strip out ANSI escape codes.
-func PrintableLength(str string) int {
-	var (
-		length   int
-		inEscape bool
-	)
-	for _, r := range str {
-		switch {
-		case inEscape:
-			if r == 'm' {
-				inEscape = false
-			}
-		case r == 27:
-			inEscape = true
-		default:
-			length++
-		}
+// CommandStatus returns a roundbox signifying whether the last command
+// succeeded or failed.
+func CommandStatus() *RoundBoxInfo {
+	var b bytes.Buffer
+	if *ExitCode != "0" {
+		SetRGB(&b, RGB{255, 0, 0}, RGBUnset)
+		b.WriteRune('▼')
+	} else {
+		SetRGB(&b, RGB{0, 255, 0}, RGBUnset)
+		b.WriteRune('▲')
 	}
-	return length
+	return RoundBox(b.String())
+}
+
+// DirnameBox returns a box with the current directory name.
+func DirnameBox() *RoundBoxInfo {
+	var b bytes.Buffer
+	SetColour(&b, "1")
+	b.WriteString(filepath.Base(Cwd))
+	return RoundBox(b.String())
 }
 
 func FitPath(p string, max int) string {
