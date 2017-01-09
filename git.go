@@ -142,6 +142,7 @@ func FindGitBranch(gitDir string) (string, int, error) {
 func CheckGitDirty(gitDir string) bool {
 	cmd := exec.Command("git", "status", "--porcelain")
 	cmd.Env = append(os.Environ(), "GIT_DIR="+gitDir)
+	cmd.Dir = filepath.Dir(gitDir)
 	op, _ := cmd.Output()
 	return len(op) != 0
 }
