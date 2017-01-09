@@ -5,16 +5,24 @@ import (
 	"io/ioutil"
 	"os"
 	"os/user"
+	"path/filepath"
 	"strconv"
 )
 
 var (
+	ConfigDir     string
 	User          *user.User
 	IsRoot        bool
 	Hostname, Cwd string
 	IsLocalhost   bool
 	LoadAvg       float32
 )
+
+// GetConfigDir finds the directory name for configuration files, saving it in
+// ConfigDir.
+func GetConfigDir() {
+	ConfigDir = filepath.Join(os.Getenv("HOME"), ".config", "bprompt")
+}
 
 // GetUser finds the current user's details, saving them in User.
 func GetUser() {

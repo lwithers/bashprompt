@@ -27,6 +27,7 @@ var (
 func main() {
 	flag.Parse()
 
+	GetConfigDir()
 	GetUser()
 	GetHost()
 	GetLoadAverage()
@@ -142,14 +143,18 @@ func Who() *RoundBoxInfo {
 	}
 	b.WriteRune('@')
 
-	// write hostname, draw attention to remote
-	if !IsLocalhost {
-		rightColour = 1
-		SetColour(&b, "1;37;41")
+	if hostInfo := LoadHostInfo(); hostInfo != nil {
+		b.Write(hostInfo)
 	} else {
-		SetColour(&b, "0;47")
+		// write hostname, draw attention to remote
+		if !IsLocalhost {
+			rightColour = 1
+			SetColour(&b, "1;37;41")
+		} else {
+			SetColour(&b, "0;47")
+		}
+		b.WriteString(Hostname)
 	}
-	b.WriteString(Hostname)
 
 	r := RoundBox(b.String())
 	r.SetColour(leftColour, rightColour)
