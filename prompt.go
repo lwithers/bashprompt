@@ -205,7 +205,7 @@ func DirnameBox() *RoundBoxInfo {
 	SetColour(&b, "1;37")
 	b.WriteString(d)
 	r := RoundBox(b.String())
-	r.SetColour(2, 2)
+	r.SetColour(4, 4)
 	return r
 }
 

@@ -29,26 +29,26 @@ func GitBox() *RoundBoxInfo {
 
 	var (
 		b           bytes.Buffer
-		leftColour  int = 4
-		rightColour int = 4
+		leftColour  int = 2
+		rightColour int = 2
 	)
 
 	if branchMode == GitModeDetachedHead {
 		leftColour = 3
 		SetColour(&b, "1;30;43")
 		b.Write([]byte(" ")) // \uf05e crossed-out circle
-		SetColour(&b, "0;34;43")
+		SetColour(&b, "0;32;43")
 		b.WriteRune('') // \ue0b2 vim powerline separator
-		SetColour(&b, "30;44")
+		SetColour(&b, "37;42")
 		b.WriteString(branch[:7])
 	} else {
-		SetColour(&b, "1;30;44")
+		SetColour(&b, "1;37;42")
 		if branchMode == GitModeTag {
 			b.WriteRune('') // \uf005 starred
 		} else {
 			b.WriteRune('') // \ue0a0 git branch marker
 		}
-		SetColour(&b, "0;30;44")
+		SetColour(&b, "0;37;42")
 		b.WriteRune(' ')
 
 		if utf8.RuneCountInString(branch) > GitMaxBranchLen {
@@ -67,7 +67,7 @@ func GitBox() *RoundBoxInfo {
 
 	if dirty {
 		rightColour = 5
-		SetColour(&b, "35;44")
+		SetColour(&b, "35;42")
 		b.WriteRune('') // \ue0b2 vim powerline separator
 		SetColour(&b, "30;45")
 		b.Write([]byte("dirty"))
