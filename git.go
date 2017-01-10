@@ -15,7 +15,7 @@ const (
 )
 
 func GitBox() *RoundBoxInfo {
-	gitDir := FindGitDir(Cwd)
+	gitDir, gitRoot := FindGitDir(Cwd)
 	if gitDir == "" {
 		return RoundBox(" — ")
 	}
@@ -25,7 +25,7 @@ func GitBox() *RoundBoxInfo {
 		return gitBoxError(err)
 	}
 
-	dirty := CheckGitDirty(gitDir)
+	dirty := CheckGitDirty(gitDir, gitRoot)
 
 	var (
 		b           bytes.Buffer
@@ -80,26 +80,32 @@ func GitBox() *RoundBoxInfo {
 
 // FindGitDir finds the path to the ".git" directory if we are inside a git
 // repository, returning the path on success or an empty string on failure.
-func FindGitDir(dir string) string {
+// It also returns the root of the git repository (which may differ from the
+// parent of gitDir if submodules are in play).
+func FindGitDir(dir string) (gitDir, gitRoot string) {
 	for depth := 0; depth < 10; depth++ {
 		if dir == "/" {
-			return ""
+			return "", ""
 		}
 		gitDir := filepath.Join(dir, ".git")
 		if fi, err := os.Stat(gitDir); err == nil {
 			if fi.IsDir() {
-				return gitDir
+				return gitDir, dir
 			}
 			if b, err := ioutil.ReadFile(gitDir); err == nil {
 				if bytes.HasPrefix(b, []byte("gitdir: ")) {
-					return filepath.Clean(filepath.Join(dir,
+					p, err := filepath.Abs(filepath.Join(dir,
 						string(bytes.TrimSpace(b[8:]))))
+					if err != nil {
+						return "", ""
+					}
+					return p, dir
 				}
 			}
 		}
 		dir = filepath.Dir(dir)
 	}
-	return ""
+	return "", ""
 }
 
 const (
@@ -139,10 +145,10 @@ func FindGitBranch(gitDir string) (string, int, error) {
 }
 
 // CheckGitDirty tests whether the given git repository is dirty or not.
-func CheckGitDirty(gitDir string) bool {
+func CheckGitDirty(gitDir, gitRoot string) bool {
 	cmd := exec.Command("git", "status", "--porcelain")
 	cmd.Env = append(os.Environ(), "GIT_DIR="+gitDir)
-	cmd.Dir = filepath.Dir(gitDir)
+	cmd.Dir = gitRoot
 	op, _ := cmd.Output()
 	return len(op) != 0
 }
