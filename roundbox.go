@@ -65,7 +65,7 @@ func PrintLine(w TerminalWriter, line int, boxes []*RoundBoxInfo) {
 		switch {
 		case i == 0:
 			leading = line
-		case line == FirstLine && i == len(boxes)-2:
+		case line == FirstLine && i == 3:
 			leading = RoundBoxSpacing + RemainingWidth(line, boxes)
 		default:
 			leading = RoundBoxSpacing

@@ -2,11 +2,13 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"os/user"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 var (
@@ -16,6 +18,14 @@ var (
 	Hostname, Cwd string
 	IsLocalhost   bool
 	LoadAvg       float32
+
+	HasBattery         bool
+	BatteryPercent     int
+	BatteryDischarging bool
+)
+
+const (
+	SysPowerPath = "/sys/class/power_supply"
 )
 
 // GetConfigDir finds the directory name for configuration files, saving it in
@@ -88,5 +98,42 @@ func GetCwd() {
 	if err != nil {
 		Cwd = "/"
 		CaptureError(err)
+	}
+}
+
+// GetBattery finds the battery level, and whether or not we are on AC. Sets
+// HasBattery, BatteryPercent and BatteryDischarging.
+func GetBattery() {
+	batPath := filepath.Join(SysPowerPath, "BAT0")
+	if _, err := os.Stat(batPath); err != nil {
+		return
+	}
+	HasBattery = true
+	BatteryPercent = -1
+	BatteryDischarging = true
+
+	cap, err := ioutil.ReadFile(filepath.Join(batPath, "capacity"))
+	if err != nil {
+		CaptureError(err)
+	} else {
+		i, err := strconv.ParseUint(strings.TrimSpace(string(cap)),
+			10, 32)
+		if err != nil {
+			CaptureError(fmt.Errorf("battery capacity: %v", err))
+		} else {
+			BatteryPercent = int(i)
+		}
+	}
+
+	ac, err := ioutil.ReadFile(filepath.Join(SysPowerPath, "AC", "online"))
+	if err != nil {
+		CaptureError(err)
+	} else {
+		t, err := strconv.ParseBool(strings.TrimSpace(string(ac)))
+		if err != nil {
+			CaptureError(fmt.Errorf("ac online: %v", err))
+		} else {
+			BatteryDischarging = !t
+		}
 	}
 }

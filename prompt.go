@@ -32,6 +32,7 @@ func main() {
 	GetHost()
 	GetLoadAverage()
 	GetCwd()
+	GetBattery()
 
 	GetWidth()
 
@@ -39,9 +40,14 @@ func main() {
 		Time(),
 		Who(),
 		RoundBox(""), // placeholder for truncated directory
+	}
+	if HasBattery {
+		firstLine = append(firstLine, Battery())
+	}
+	firstLine = append(firstLine,
 		LoadAverage(),
 		CommandStatus(),
-	}
+	)
 
 	path := FitPath(Cwd, RemainingWidth(FirstLine, firstLine))
 	firstLine[2] = RoundBox(path)
@@ -159,6 +165,31 @@ func Who() *RoundBoxInfo {
 	r := RoundBox(b.String())
 	r.SetColour(leftColour, rightColour)
 	return r
+}
+
+// Battery returns a RoundBox displaying the current battery level and charge
+// status.
+func Battery() *RoundBoxInfo {
+	var b bytes.Buffer
+	switch {
+	case BatteryPercent > 80: // green
+		SetColour(&b, "32")
+	case BatteryPercent > 40: // yellow
+		SetColour(&b, "33")
+	default: // red
+		SetColour(&b, "31")
+	}
+	fmt.Fprintf(&b, "%d%%", BatteryPercent)
+
+	if BatteryDischarging {
+		SetColour(&b, "31") // red
+		b.WriteRune('▽')
+	} else {
+		SetColour(&b, "33") // yellow
+		b.WriteRune('')    // \uE00A (powerline electric bolt)
+	}
+
+	return RoundBox(b.String())
 }
 
 // LoadAverage returns a RoundBox displaying the colour-coded load average.
