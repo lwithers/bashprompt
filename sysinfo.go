@@ -106,7 +106,10 @@ func GetCwd() {
 func GetBattery() {
 	batPath := filepath.Join(SysPowerPath, "BAT0")
 	if _, err := os.Stat(batPath); err != nil {
-		return
+		batPath = filepath.Join(SysPowerPath, "BAT1")
+		if _, err := os.Stat(batPath); err != nil {
+			return
+		}
 	}
 	HasBattery = true
 	BatteryPercent = -1
@@ -122,6 +125,9 @@ func GetBattery() {
 			CaptureError(fmt.Errorf("battery capacity: %v", err))
 		} else {
 			BatteryPercent = int(i)
+			if BatteryPercent > 100 {
+				BatteryPercent = 100
+			}
 		}
 	}
 
