@@ -186,7 +186,7 @@ func Battery() *RoundBoxInfo {
 		b.WriteRune('▽')
 	} else {
 		SetColour(&b, "33") // yellow
-		b.WriteRune('')    // \uE00A (powerline electric bolt)
+		b.WriteRune('⚡')    // \u26A1 (high voltage sign)
 	}
 
 	return RoundBox(b.String())

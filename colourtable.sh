@@ -14,3 +14,6 @@ do
 		echo ""
 	done
 done
+
+echo "Foreground: \\033[3?m"
+echo "Background: \\033[4?m"

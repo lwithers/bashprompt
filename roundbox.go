@@ -51,11 +51,11 @@ func (r *RoundBoxInfo) Draw(w TerminalWriter, leading int) {
 	}
 
 	SetColour(w, fmt.Sprintf("3%d", r.leftColour))
-	w.WriteRune('') // \uE0B6 (powerline extra symbol)
+	w.WriteRune('') // \uE0B2 (powerline extra symbol)
 	SetColour(w, fmt.Sprintf("0;4%d", r.leftColour))
 	w.WriteString(r.text)
 	SetColour(w, fmt.Sprintf("0;3%d", r.rightColour))
-	w.WriteRune('') // \uE0B4 (powerline extra symbol)
+	w.WriteRune('') // \uE0B0 (powerline extra symbol)
 }
 
 func PrintLine(w TerminalWriter, line int, boxes []*RoundBoxInfo) {
