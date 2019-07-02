@@ -131,7 +131,11 @@ func GetBattery() {
 		}
 	}
 
-	ac, err := ioutil.ReadFile(filepath.Join(SysPowerPath, "AC", "online"))
+	acPath := filepath.Join(SysPowerPath, "AC")
+	if _, err := os.Stat(acPath); err != nil {
+		acPath = filepath.Join(SysPowerPath, "ADP1")
+	}
+	ac, err := ioutil.ReadFile(filepath.Join(acPath, "online"))
 	if err != nil {
 		CaptureError(err)
 	} else {
